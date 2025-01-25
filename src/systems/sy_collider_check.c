@@ -1,13 +1,11 @@
-#include "co_position.h"
-#include "co_rigidbody.h"
-#include <flecs.h>
-#include <raylib.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "systems.h"
 
-#define MAX_COLLISIONS 1024
+#define MAX_COLLISIONS 30
+
+#define GRID_SIZE 20
+#define GRID_WIDTH 20
+#define GRID_HEIGHT 20
+#define MAX_ENTITIES_PER_CELL 10
 
 typedef struct {
   int entityA;
@@ -19,8 +17,21 @@ typedef struct {
   int count;
 } CollisionSet;
 
+typedef struct {
+  int entities[MAX_ENTITIES_PER_CELL];
+  int count;
+} Cell;
+
+typedef struct {
+  Cell cells[GRID_WIDTH * GRID_HEIGHT];
+  int non_empty_cells[GRID_WIDTH *
+                      GRID_HEIGHT]; // Lista de índices de celdas no vacías
+  int non_empty_count;              // Número de celdas no vacías
+} SpatialGrid;
+
 static CollisionSet previous_collisions;
 static CollisionSet current_collisions;
+static SpatialGrid grid;
 
 // Inicializar un conjunto de colisiones
 static void collision_set_clear(CollisionSet *set) { set->count = 0; }
@@ -69,25 +80,6 @@ static bool collision_set_contains(const CollisionSet *set, int entityA,
   }
   return false;
 }
-
-#define GRID_SIZE 100
-#define GRID_WIDTH 20
-#define GRID_HEIGHT 20
-#define MAX_ENTITIES_PER_CELL 10
-
-typedef struct {
-  int entities[MAX_ENTITIES_PER_CELL];
-  int count;
-} Cell;
-
-typedef struct {
-  Cell cells[GRID_WIDTH * GRID_HEIGHT];
-  int non_empty_cells[GRID_WIDTH *
-                      GRID_HEIGHT]; // Lista de índices de celdas no vacías
-  int non_empty_count;              // Número de celdas no vacías
-} SpatialGrid;
-
-static SpatialGrid grid;
 
 // Limpiar el grid (resetea conteos de celdas y lista de celdas no vacías)
 static void grid_clear(SpatialGrid *grid) {
@@ -177,31 +169,30 @@ void sy_collider_check(ecs_iter_t *it) {
               !collision_set_contains(&previous_collisions, entityA, entityB);
           collision_set_add(&current_collisions, entityA, entityB);
 
-          // Detectar cuál se está moviendo
           bool entityA_moved = (p[localA].x != p[localA].__pre_x) ||
                                (p[localA].y != p[localA].__pre_y);
           bool entityB_moved = (p[localB].x != p[localB].__pre_x) ||
                                (p[localB].y != p[localB].__pre_y);
 
-          if (entityA_moved && !entityB_moved) {
-            printf("Entity %d (moved) collided with %d (static)\n", entityA,
-                   entityB);
-            // Regresa a entityA a su posición previa
-            p[localA].x = p[localA].__pre_x;
-            p[localA].y = p[localA].__pre_y;
-          } else if (entityB_moved && !entityA_moved) {
-            printf("Entity %d (moved) collided with %d (static)\n", entityB,
-                   entityA);
-            // Regresa a entityB a su posición previa
-            p[localB].x = p[localB].__pre_x;
-            p[localB].y = p[localB].__pre_y;
-          } else {
-            // Ambos se movieron (puedes manejar este caso si es necesario)
-            printf("Both entities %d and %d are moving\n", entityA, entityB);
-            p[localA].x = p[localA].__pre_x;
-            p[localA].y = p[localA].__pre_y;
-            p[localB].x = p[localB].__pre_x;
-            p[localB].y = p[localB].__pre_y;
+          // Verificar si la entidad contra la que colisiona es sólida
+          if (rigidbody[localB].is_solid || rigidbody[localA].is_solid) {
+            if (entityA_moved && !entityB_moved) {
+              printf("Entity %d (moved) collided with %d (solid)\n", entityA,
+                     entityB);
+              p[localA].x = p[localA].__pre_x;
+              p[localA].y = p[localA].__pre_y;
+            } else if (entityB_moved && !entityA_moved) {
+              printf("Entity %d (moved) collided with %d (solid)\n", entityB,
+                     entityA);
+              p[localB].x = p[localB].__pre_x;
+              p[localB].y = p[localB].__pre_y;
+            } else {
+              printf("Both entities %d and %d are moving\n", entityA, entityB);
+              p[localA].x = p[localA].__pre_x;
+              p[localA].y = p[localA].__pre_y;
+              p[localB].x = p[localB].__pre_x;
+              p[localB].y = p[localB].__pre_y;
+            }
           }
         }
       }

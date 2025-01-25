@@ -5,7 +5,7 @@
 
 typedef struct co_rigidbody {
   Rectangle rect;
-  bool solid;
+  bool is_solid;
 } co_rigidbody;
 
 extern ECS_COMPONENT_DECLARE(co_rigidbody);
